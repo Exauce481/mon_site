@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>QR sécurisé avec historique</title>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+<style>
+body { font-family: Arial; background:#f2f2f2; padding:20px }
+.box { background:#fff; padding:15px; border-radius:8px; max-width:380px; margin:auto }
+input, button { width:100%; padding:10px; margin-top:10px }
+.hidden { display:none }
+#error { color:red; margin-top:10px }
+.history { margin-top:15px }
+.item { background:#eee; padding:8px; margin-top:5px; cursor:pointer; border-radius:5px }
+#qrcode { margin-top:15px; text-align:center; position:relative }
+.logo {
+  position:absolute;
+  width:40px;
+  height:40px;
+  top:50%;
+  left:50%;
+  transform:translate(-50%,-50%);
+  border-radius:6px;
+}
+</style>
+</head>
+
+<body>
+
+<!-- 🔒 ÉCRAN MOT DE PASSE -->
+<div class="box" id="login">
+  <h3>🔒 Accès protégé</h3>
+  <input type="password" id="password" placeholder="Mot de passe">
+  <button onclick="verifier()">Entrer</button>
+  <div id="error"></div>
+</div>
+
+<!-- 🔗 APPLICATION -->
+<div class="box hidden" id="app">
+  <h3>🔗 Générateur de QR</h3>
+
+  <input id="url" type="text" placeholder="https://exemple.com">
+  <button onclick="generer()">Générer le QR</button>
+  <button onclick="telecharger()">⬇️ Télécharger</button>
+
+  <div id="qrcode"></div>
+
+  <div class="history">
+    <h4>🕘 Historique</h4>
+    <div id="history"></div>
+  </div>
+</div>
+
+<script>
+/* =====================
+   🔐 MOT DE PASSE SÉCURISÉ
+   ===================== */
+
+// HASH SHA-256 du mot de passe "1234"
+const PASSWORD_HASH =
+"03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4";
+
+// Fonction SHA-256
+async function sha256(text) {
+  const data = new TextEncoder().encode(text);
+  const hash = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(hash))
+    .map(b => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+async function verifier() {
+  const input = document.getElementById("password").value;
+  const hash = await sha256(input);
+
+  if (hash === PASSWORD_HASH) {
+    document.getElementById("login").classList.add("hidden");
+    document.getElementById("app").classList.remove("hidden");
+    chargerHistorique();
+  } else {
+    document.getElementById("error").innerText = "Mot de passe incorrect";
+  }
+}
+
+/* =====================
+   🔳 QR + HISTORIQUE
+   ===================== */
+
+function generer() {
+  const url = document.getElementById("url").value.trim();
+  if (!url.startsWith("http")) {
+    alert("Adresse web invalide");
+    return;
+  }
+
+  document.getElementById("qrcode").innerHTML = "";
+
+  new QRCode(document.getElementById("qrcode"), {
+    text: url,
+    width: 200,
+    height: 200
+  });
+
+  // logo
+  setTimeout(() => {
+    const img = document.createElement("img");
+    img.src = "https://upload.wikimedia.org/wikipedia/commons/6/6b/QR_Code_logo.png";
+    img.className = "logo";
+    document.getElementById("qrcode").appendChild(img);
+  }, 200);
+
+  sauvegarder(url);
+  chargerHistorique();
+}
+
+function sauvegarder(url) {
+  let h = JSON.parse(localStorage.getItem("qr_history") || "[]");
+  if (!h.includes(url)) {
+    h.unshift(url);
+    localStorage.setItem("qr_history", JSON.stringify(h.slice(0, 10)));
+  }
+}
+
+function chargerHistorique() {
+  const h = JSON.parse(localStorage.getItem("qr_history") || "[]");
+  const div = document.getElementById("history");
+  div.innerHTML = "";
+
+  h.forEach(url => {
+    const d = document.createElement("div");
+    d.className = "item";
+    d.textContent = url;
+    d.onclick = () => {
+      document.getElementById("url").value = url;
+      generer();
+    };
+    div.appendChild(d);
+  });
+}
+
+function telecharger() {
+  const canvas = document.querySelector("#qrcode canvas");
+  if (!canvas) return alert("Génère un QR d'abord");
+  const a = document.createElement("a");
+  a.href = canvas.toDataURL("image/png");
+  a.download = "qr.png";
+  a.click();
+}
+</script>
+
+</body>
+</html>
